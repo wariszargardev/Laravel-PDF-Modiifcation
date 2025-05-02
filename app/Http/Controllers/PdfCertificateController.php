@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\View;
 use setasign\Fpdi\Fpdi;
-use Illuminate\Support\Facades\Response;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class PdfCertificateController extends Controller
 {
@@ -79,13 +79,18 @@ class PdfCertificateController extends Controller
     }
 
     
-    public function addHeaderFooterImages()
+    public function addHeaderFooterImages($data = [])
     {
-        $sourcePdf = public_path('samplePDF.pdf'); 
-        // $outputPdf = public_path('updated_with_images.pdf');
+        // First generate the HTML content from blade
+        $html = View::make('pdf.gig-schedule', compact('data'))->render();
+        
+        // Create temporary PDF from HTML
+        $tempPdf = public_path('temp_gigSchedule.pdf');
+        PDF::loadHTML($html)->save($tempPdf);
 
+        // Now process with FPDI
         $pdf = new Fpdi();
-        $pageCount = $pdf->setSourceFile($sourcePdf);
+        $pageCount = $pdf->setSourceFile($tempPdf);
 
         for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
             $templateId = $pdf->importPage($pageNo);
@@ -96,17 +101,143 @@ class PdfCertificateController extends Controller
 
             // Add header image
             $headerPath = public_path('Header.png');
-            $pdf->Image($headerPath, 10, 10, $size['width'] - 20); // adjust X, Y, Width
+            $pdf->Image($headerPath, 0, 0, $size['width']);
 
             // Add footer image
             $footerPath = public_path('Footer.png');
-            $pdf->Image($footerPath, 10, $size['height'] - 30, $size['width'] - 20); // adjust as needed
+            $pdf->Image($footerPath, 0, $size['height'] - 30, $size['width']);
         }
 
-        // $pdf->Output($outputPdf, 'F');
+        // Clean up temporary file
+        if (file_exists($tempPdf)) {
+            unlink($tempPdf);
+        }
 
         return response($pdf->Output('S', 'certificate.pdf'))
             ->header('Content-Type', 'application/pdf');
     }
 
+
+    
+    public function addHeaderFooterImagesOld($data = [])
+    {
+        // First generate the HTML content from blade
+        $html = View::make('pdf.gig-schedule', compact('data'))->render();
+        
+        // Create temporary PDF from HTML
+        $tempPdf = public_path('temp_gigSchedule.pdf');
+        PDF::loadHTML($html)->save($tempPdf);
+
+        // Now process with FPDI
+        $pdf = new Fpdi();
+        $pageCount = $pdf->setSourceFile($tempPdf);
+
+        for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
+            $templateId = $pdf->importPage($pageNo);
+            $size = $pdf->getTemplateSize($templateId);
+
+            $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+            $pdf->useTemplate($templateId);
+
+            // Add header image
+            $headerPath = public_path('Header.png');
+            $pdf->Image($headerPath, 0, 0, $size['width']);
+
+            // Add footer image
+            $footerPath = public_path('Footer.png');
+            $pdf->Image($footerPath, 0, $size['height'] - 30, $size['width']);
+        }
+
+        // Clean up temporary file
+        if (file_exists($tempPdf)) {
+            unlink($tempPdf);
+        }
+
+        return response($pdf->Output('S', 'certificate.pdf'))
+            ->header('Content-Type', 'application/pdf');
+    }
+
+    // Add a method to preview the certificate
+    public function previewCertificate($data = [])
+    {
+        return view('pdf.gig-schedule', compact('data'));
+    }
+
+    public function addHeaderFooterImagesWithContent($data = [])
+    {
+        // Generate HTML content from blade for before and after sections
+        $beforeHtml = View::make('pdf.gig-schedule', compact('data'))->render();
+        $afterHtml = View::make('pdf.gig-schedule', compact('data'))->render();
+        
+        // Create temporary PDFs from HTML
+        $beforePdf = public_path('temp_before.pdf');
+        $afterPdf = public_path('temp_after.pdf');
+        PDF::loadHTML($beforeHtml)->save($beforePdf);
+        PDF::loadHTML($afterHtml)->save($afterPdf);
+
+        // Load source PDF
+        $sourcePdf = public_path('samplePDF.pdf');
+        
+        // Create final PDF
+        $pdf = new Fpdi();
+        
+        // Add pages from before PDF
+        $beforePageCount = $pdf->setSourceFile($beforePdf);
+        for ($pageNo = 1; $pageNo <= $beforePageCount; $pageNo++) {
+            $templateId = $pdf->importPage($pageNo);
+            $size = $pdf->getTemplateSize($templateId);
+            $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+            $pdf->useTemplate($templateId);
+            
+            // Add header and footer to each page
+            $headerPath = public_path('Header.png');
+            $pdf->Image($headerPath, 0, 0, $size['width']);
+            
+            $footerPath = public_path('Footer.png');
+            $pdf->Image($footerPath, 0, $size['height'] - 30, $size['width']);
+        }
+        
+        // Add pages from source PDF
+        $sourcePageCount = $pdf->setSourceFile($sourcePdf);
+        for ($pageNo = 1; $pageNo <= $sourcePageCount; $pageNo++) {
+            $templateId = $pdf->importPage($pageNo);
+            $size = $pdf->getTemplateSize($templateId);
+            $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+            $pdf->useTemplate($templateId);
+            
+            // Add header and footer to each page
+            $headerPath = public_path('Header.png');
+            $pdf->Image($headerPath, 0, 0, $size['width']);
+            
+            $footerPath = public_path('Footer.png');
+            $pdf->Image($footerPath, 0, $size['height'] - 30, $size['width']);
+        }
+        
+        // Add pages from after PDF
+        $afterPageCount = $pdf->setSourceFile($afterPdf);
+        for ($pageNo = 1; $pageNo <= $afterPageCount; $pageNo++) {
+            $templateId = $pdf->importPage($pageNo);
+            $size = $pdf->getTemplateSize($templateId);
+            $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+            $pdf->useTemplate($templateId);
+            
+            // Add header and footer to each page
+            $headerPath = public_path('Header.png');
+            $pdf->Image($headerPath, 0, 0, $size['width']);
+            
+            $footerPath = public_path('Footer.png');
+            $pdf->Image($footerPath, 0, $size['height'] - 30, $size['width']);
+        }
+
+        // Clean up temporary files
+        if (file_exists($beforePdf)) {
+            unlink($beforePdf);
+        }
+        if (file_exists($afterPdf)) {
+            unlink($afterPdf);
+        }
+
+        return response($pdf->Output('S', 'certificate.pdf'))
+            ->header('Content-Type', 'application/pdf');
+    }
 }
